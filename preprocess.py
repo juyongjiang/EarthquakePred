@@ -7,6 +7,7 @@ from pandas.core.indexing import is_label_like
 from typing_extensions import final
 from tqdm import tqdm
 from utils import *
+from area_map import area_groups
 
 
 def merge_em_ga_data(Station_Info_Path:str, Data_Folder_Path:str, Used_features:dict, Merged_Data_Path:dict):
@@ -153,7 +154,7 @@ def add_label(res_df:pd.DataFrame, eqData_area:pd.DataFrame, start_stamp:int):
 if __name__ == "__main__":
     ## configuration
     Data_Folder_Path = './dataset/'                     
-    Eq_list_path = Data_Folder_Path + 'EC_TRAINSET_TESTSET.csv' # earthquake data            
+    Eq_list_path = os.path.join(Data_Folder_Path, 'raw', 'EC_TRAINSET.csv') # earthquake data            
     Station_Info_Path = Data_Folder_Path + 'StationInfo.csv'    # station information data
     Used_features = {'magn':['StationID', 'TimeStamp', 'magn@abs_mean'],
                     'sound':['StationID', 'TimeStamp', 'sound@abs_mean']} # the selected features in EM and GA
@@ -184,16 +185,6 @@ if __name__ == "__main__":
     EqData = pd.read_csv(Eq_list_path)
     magn_data = load_object(Merged_Data_Path['magn'])
     sound_data = load_object(Merged_Data_Path['sound'])
-    area_groups = [
-        {'id':set([133, 246, 119, 122, 59, 127]),'range':[30,34,98,101]},
-        {'id':set([128, 129, 19, 26, 159, 167, 170, 182, 310, 184, 188, 189, 191, 197, 201, 204, 88, 90, 91, 93, 94, 221, 223, 98, 107, 235, 236, 252, 250, 124, 125]),'range':[30,34,101,104]},
-        {'id':set([141, 150, 166, 169, 43, 172, 183, 198, 202, 60241, 212, 214, 99, 228, 238, 115, 116, 121, 251]),'range':[30,34,104,107]},
-        {'id':set([131, 36, 164, 165, 231, 60139, 174, 175, 206, 303, 82, 51, 243, 55, 308, 119, 313, 318]),'range':[26,30,98,101]},
-        {'id':set([256, 130, 132, 147, 148, 149, 151, 153, 32, 33, 35, 60195, 38, 39, 41, 302, 304, 177, 305, 307, 181, 309, 314, 315, 316, 317, 319, 320, 193, 322, 200, 73, 329, 75, 333, 78, 334, 84, 87, 60251, 96, 225, 101, 229, 105, 109, 40047, 240, 247, 120, 254, 255]),'range':[26,30,101,104]},
-        {'id':set([352, 321, 355, 324, 326, 328, 331, 77, 47, 48, 335, 339]),'range':[26,30,104,107]},
-        {'id':set([161, 226, 137, 138, 171, 140, 113, 306, 152, 186, 220, 60157]),'range':[22,26,98,101]},
-        {'id':set([50117, 327, 106, 332, 142, 146, 24, 155, 156, 29]),'range':[22,26,101,104]}
-    ]
 
     if not os.listdir(Area_Feature_Path):
         for i, area in enumerate(area_groups):

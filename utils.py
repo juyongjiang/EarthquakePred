@@ -1,4 +1,7 @@
+import os
+import random
 import torch
+import numpy as np
 from time import strptime, mktime, localtime, strftime
 
 
@@ -24,6 +27,15 @@ def get_device(args):
     set_seed(args) # reproductibility
 
     return device
+
+def print_model_parameters(model, only_num = True):
+    print('*****************Model Parameter*****************')
+    if not only_num:
+        for name, param in model.named_parameters():
+            print(name, param.shape, param.requires_grad)
+    total_num = sum([param.nelement() for param in model.parameters()])
+    print('Total params num: {}'.format(total_num))
+    print('*****************Finish Parameter****************')
 
 def dump_object(path:str, target_obj):
     from pickle import dump

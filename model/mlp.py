@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-class mlp_eq(nn.Module):
+class eqpred_mlp(nn.Module):
     def __init__(self, args):
-        super(mlp_eq, self).__init__()
+        super(eqpred_mlp, self).__init__()
         self.input_dim = args.input_dim
         self.hidden_dim = args.hidden_dim
         self.num_classes = args.num_classes
@@ -17,5 +17,5 @@ class mlp_eq(nn.Module):
     
     def forward(self, x):
         out = self.model(x)
-        
+
         return out

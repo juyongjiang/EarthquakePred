@@ -1,24 +1,24 @@
-# import lightgbm as lgb
 import pandas as pd
 import numpy as np
 import os
 import zipfile
 import warnings
 warnings.filterwarnings('ignore')
-from utils import *
+import argparse
+import csv
 from numpy.lib.function_base import extract
 from preprocess import generate_features
+from area_map import area_groups, magn_level
+from model.mlp import eqpred_mlp
+from utils import *
 
 
-if __name__ == "__main__":
-	zip_path = './dataset/AETA_20220529-20220702/'
-	save_path = './dataset/data_week/'
-	if not os.path.exists(save_path): os.makedirs(save_path)
-	time_range = ['20220529', '20220604'] # a week range
+def get_range_data(time_range):
+	if not os.path.exists(args.save_path): os.makedirs(args.save_path)
 	file_name = 'EM&GA_' + time_range[0] + '-' + time_range[1] # time1 - time2
-	extractpath = os.path.join(save_path, file_name) # save unzip files
+	extractpath = os.path.join(args.save_path, file_name) # save unzip files
 	if not os.path.exists(extractpath):
-		frzip = zipfile.ZipFile(os.path.join(zip_path, file_name+'.zip'), 'r')
+		frzip = zipfile.ZipFile(os.path.join(args.zip_path, file_name+'.zip'), 'r')
 		frzip.extractall(extractpath)
 		frzip.close()
 	else:
@@ -42,20 +42,49 @@ if __name__ == "__main__":
 		with zipfile.ZipFile(ga_path+filename, 'r') as frzip:
 			frzip.extractall(ga_path)
 
-	# start prediction
-	area_groups = [
-        {'id':set([133, 246, 119, 122, 59, 127]),'range':[30,34,98,101]},
-        {'id':set([128, 129, 19, 26, 159, 167, 170, 182, 310, 184, 188, 189, 191, 197, 201, 204, 88, 90, 91, 93, 94, 221, 223, 98, 107, 235, 236, 252, 250, 124, 125]),'range':[30,34,101,104]},
-        {'id':set([141, 150, 166, 169, 43, 172, 183, 198, 202, 60241, 212, 214, 99, 228, 238, 115, 116, 121, 251]),'range':[30,34,104,107]},
-        {'id':set([131, 36, 164, 165, 231, 60139, 174, 175, 206, 303, 82, 51, 243, 55, 308, 119, 313, 318]),'range':[26,30,98,101]},
-        {'id':set([256, 130, 132, 147, 148, 149, 151, 153, 32, 33, 35, 60195, 38, 39, 41, 302, 304, 177, 305, 307, 181, 309, 314, 315, 316, 317, 319, 320, 193, 322, 200, 73, 329, 75, 333, 78, 334, 84, 87, 60251, 96, 225, 101, 229, 105, 109, 40047, 240, 247, 120, 254, 255]),'range':[26,30,101,104]},
-        {'id':set([352, 321, 355, 324, 326, 328, 331, 77, 47, 48, 335, 339]),'range':[26,30,104,107]},
-        {'id':set([161, 226, 137, 138, 171, 140, 113, 306, 152, 186, 220, 60157]),'range':[22,26,98,101]},
-        {'id':set([50117, 327, 106, 332, 142, 146, 24, 155, 156, 29]),'range':[22,26,101,104]}
-    ]	
-	max_mag = -1
-	eq_area = -1
-	print(em_id, ga_id)
+	return em_path, em_id, ga_path, ga_id
+
+def write_csv(args, save_path, longitude=-1, latitude=-1, max_mag=-1):
+	# write earthquake results into csv
+	if not os.path.exists(save_path):
+		with open(save_path, mode='a', newline='') as predict_file:
+			csv_writer = csv.writer(predict_file)
+			csv_writer.writerow(['whether', 'longitude', 'latitude', 'magnitude', 'starttime', 'endtime'])
+			if max_mag == -1:
+				csv_writer.writerow([0, '', '', '', args.time_range[0], args.time_range[1]])
+			else:
+				csv_writer.writerow([1, longitude, latitude, max_mag, args.time_range[0], args.time_range[1]])
+	else:
+		with open(save_path, mode='a', newline='') as predict_file:
+			csv_writer = csv.writer(predict_file)
+			if max_mag == -1:
+				csv_writer.writerow([0, '', '', '', args.time_range[0], args.time_range[1]])
+			else:
+				csv_writer.writerow([1, longitude, latitude, max_mag, args.time_range[0], args.time_range[1]])
+
+
+if __name__ == "__main__":
+	parser = argparse.ArgumentParser(description='arguments')
+	parser.add_argument('--time_range', default=['20220529', '20220604'], nargs="+")
+	parser.add_argument('--zip_path', default='./dataset/AETA_20220529-20220702/', type=str)
+	parser.add_argument('--save_path', default='./dataset/data_week/', type=str)
+	parser.add_argument('--prediction', default='./prediciton.csv', type=str)
+	parser.add_argument('--eq_gt', default='./ground_truth.csv', type=str)
+	parser.add_argument('--seed', default=123, type=int)
+	parser.add_argument('--saved', default='./saved', type=str, help='the root path of each area model')
+	parser.add_argument('--gpu_id', default=-1, type=int, help='if none gpus, please set -1')
+	# keep them being the same as train stage
+	parser.add_argument('--input_dim', default=48, type=int, help='the number of used features')
+	parser.add_argument('--hidden_dim', default=96, type=int)
+	parser.add_argument('--num_classes', default=5, type=int)
+	args = parser.parse_args()
+
+	args.device = get_device(args)
+	# time_range = ['20220529', '20220604'] # a week range
+	em_path, em_id, ga_path, ga_id = get_range_data(args.time_range) # obtain the corresponding em&ga data in time range
+	print(em_path, em_id, '\n', ga_path, ga_id)
+
+	max_mag, eq_area = -1, -1 # the max magnitude in all areas, eq_area is the index of each area
 	for area in (0, 1, 2, 3, 4, 5, 6, 7):
 		## concat all EM and GA data from all stations of each area in a week range
 		sid = area_groups[area]['id'] & em_id & ga_id # get station id in each area
@@ -71,31 +100,54 @@ if __name__ == "__main__":
 		ga_data = pd.concat(ga_list)
 		del ga_list # release memory 
 
-		## get representative features
-		start_stamp = string2stamp(time_range[0])
+		## get representative features by weekly time interval
+		start_stamp = string2stamp(args.time_range[0])
 		em_data = generate_features(em_data, 7, 'magn', start_stamp)
 		ga_data = generate_features(ga_data, 7, 'sound', start_stamp)
-		
 		_final_res = pd.merge(em_data, ga_data, on='Day', how='left')
 		_final_res.fillna(0, inplace=True)
 		_final_res.drop('Day', axis=1, inplace=True)
 		features = _final_res.iloc[-1] # use the last week's features to predict the next week's earthquake
-		print(len(features))
-		input('check')
+		
+
+		features = torch.tensor(np.array(features.values), dtype=torch.float64).to(args.device) # len=1
+		model = eqpred_mlp(args).to(args.device)
+		print('==> MLP model Info ...')
+		print(model)
+		model.load_state_dict(torch.load(os.path.join(args.saved, f'eqmodel-{area}.pth')))
+		model.eval()
 		## model prediction
-		lgb_model = lgb.Booster(model_file=f'./model/{area}_mag_model.txt')
-		predict = np.matrix(lgb_model.predict(features, num_iteration=lgb_model.best_iteration))
-		predict = predict[0].argmax(axis=1)
-		if predict[0] == 0:
-			continue
-		else:
-			if(predict[0] > max_mag):
-				max_mag = predict[0, 0]
-				eq_area = area
+		with torch.no_grad():
+			output = model(features)
+			_, preds = output.max(1)
+			if preds[0] == 0:
+				continue
+			else:
+				if(preds[0] > max_mag):
+					max_mag = preds[0]
+					eq_area = area
 
-	magn_level = {0:0, 1:3.7, 2:4.2, 3:4.7, 4:5}
-	long = (area_groups[eq_area]['range'][2] + area_groups[eq_area]['range'][3])/2
-	lati = (area_groups[eq_area]['range'][0] + area_groups[eq_area]['range'][1])/2
-	print(f'magnitude:{magn_level[max_mag]}, longitude:{long}, latitude:{lati}')
+	if max_mag != -1:
+		# use the center of area represents the next possible earthquake location
+		longitude = (area_groups[eq_area]['range'][2] + area_groups[eq_area]['range'][3]) / 2
+		latitude = (area_groups[eq_area]['range'][0] + area_groups[eq_area]['range'][1]) / 2
+		print(f'magnitude:{magn_level[max_mag]}, longitude:{longitude}, latitude:{latitude}')
+		write_csv(args, args.prediction, longitude, latitude, max_mag)
+	else:
+		write_csv(args, args.prediction, max_mag=-1)
 
-
+	## print the ground truth in the next week
+	groud_truth = pd.read_csv(os.path.join(args.zip_path, f'EC_{args.time_range[0]}-{args.time_range[1]}.csv'))
+	pre_Range_left = string2stamp(args.time_range[1]) + 86400
+	pre_Range_right = string2stamp(args.time_range[1]) + 86400*7
+	_eq_gt = groud_truth[(groud_truth['Timestamp']<pre_Range_right) & (groud_truth['Timestamp']>=pre_Range_left)]
+	if len(_eq_gt) == 0:
+		write_csv(args, args.eq_gt, max_mag=-1)
+	elif len(_eq_gt) == 1: # have the onece earthquake
+		write_csv(args, args.eq_gt, _eq_gt['Longitude'], _eq_gt['Latitude'], _eq_gt['Magnitude'])
+	else:
+		_eq_max = _eq_gt.iloc[_eq_gt['Magnitude'].argmax()]
+		gt_max_mag = _eq_max['Magnitude']
+		gt_longitude = _eq_max['Longitude']
+		gt_latitude = _eq_max['Latitude']
+		write_csv(args, args.eq_gt, gt_longitude, gt_latitude, gt_max_mag)
