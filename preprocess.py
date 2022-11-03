@@ -166,8 +166,8 @@ if __name__ == "__main__":
     Merged_Data_Path= {'magn':os.path.join(Processed_Data_Path, 'magn_data.pkl'),
                        'sound':os.path.join(Processed_Data_Path, 'sound_data.pkl')}
     # split all data into training and validation according to time range
-    Time_Range = {'train':['20161001','20200331'],             
-                  'valid':['20200401','20201231']}   
+    Time_Range = {'train':['20170101','20220331'],             
+                  'valid':['20220401','20220430']}     
                                 
     Window = 7  # the size of slide window (/days)                                                                                                 
     

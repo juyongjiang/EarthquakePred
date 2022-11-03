@@ -48,6 +48,7 @@ def train(args, model, train_dataloader, valid_dataloader, area):
     optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr, eps=1.0e-8, weight_decay=5e-4, amsgrad=False)
     criterion = nn.CrossEntropyLoss()
     best_acc = 0.0
+    best_loss = 1e8
     for epoch in range(1, args.epoch+1):
         model.train()
         total_loss = 0.0
@@ -64,21 +65,27 @@ def train(args, model, train_dataloader, valid_dataloader, area):
         print(batch_idx)
         avg_loss = total_loss / len(train_dataloader)
         
-        model.eval()
-        with torch.no_grad():
-            acc = 0.0
-            for batch_idx, (features, labels) in enumerate(valid_dataloader):
-                features = features.to(args.device)
-                labels = labels.to(args.device)
+        if len(valid_dataloader.dataset) == 0:
+            if avg_loss <= best_loss:
+                best_loss = avg_loss
+                torch.save(model.state_dict(), model_saved)
+            print('******Epoch {}: Loss: {:.6f}'.format(epoch, avg_loss))
+        else:
+            model.eval()
+            with torch.no_grad():
+                acc = 0.0
+                for batch_idx, (features, labels) in enumerate(valid_dataloader):
+                    features = features.to(args.device)
+                    labels = labels.to(args.device)
 
-                output = model(features)
-                _, preds = output.max(1) # [B, C]
-                acc += preds.eq(labels).sum()
-            acc = acc / len(valid_dataloader.dataset) # len(valid_dataloader): the number of batch; len(valid_dataloader.dataset): the number of samples
-        
-        print('******Epoch {}: Loss: {:.6f} Acc: {:.6f}'.format(epoch, avg_loss, acc))
-        if best_acc <= acc:
-            torch.save(model.state_dict(), model_saved)
+                    output = model(features)
+                    _, preds = output.max(1) # [B, C]
+                    acc += preds.eq(labels).sum()
+                acc = acc / len(valid_dataloader.dataset) # len(valid_dataloader): the number of batch; len(valid_dataloader.dataset): the number of samples
+            
+            print('******Epoch {}: Loss: {:.6f} Acc: {:.6f}'.format(epoch, avg_loss, acc))
+            if best_acc <= acc:
+                torch.save(model.state_dict(), model_saved)
 
 if __name__ == "__main__":
     args = get_arguments()
