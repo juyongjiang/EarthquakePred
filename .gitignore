@@ -4,3 +4,4 @@ exp/
 dataset/*
 saved/*
 .DS_Store
+!dataset/processed/AREA_FEATURE/*
